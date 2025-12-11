@@ -25,6 +25,14 @@ libsign_TARGET= libsignelf.a
 sign_TARGET= signelf
 verify_TARGET= verifyelf
 
+ifeq ($(BUILD_ARCH),32)
+	ARCH_DEF= -DARCH_32BIT
+else
+	BUILD_ARCH= 64
+	ARCH_DEF= -DARCH_64BIT
+endif
+
+
 # default targets
 TARGETS=						\
 	$(libsign_TARGET)			\
@@ -57,11 +65,15 @@ endif
 CFLAGS= \
 	$(CFLAGS_WARNINGS) \
 	$(CFLAGS_OPTIMIZE) \
+	$(ARCH_DEF)\
 	$(PIC) \
 	-I. \
 	$(INCLUDES)
 
-default all: $(TAGS) $(TARGETS)
+default all: prebuild $(TAGS) $(TARGETS)
+
+prebuild: 
+	@echo "Building in $(BUILD_ARCH)-bit mode"
 
 privkey:
 	openssl genrsa -out $@ 4096
@@ -126,4 +138,4 @@ cleankeys:
 distclean clean:
 	rm -f tags $(genkeypr_TARGET) $(libsign_TARGET) $(sign_TARGET) $(verify_TARGET) $(genkeypr_OBJ) $(libsign_OBJ) $(sign_OBJ) $(verify_OBJ)
 
-.PHONY=install install-lang uninstall install-dev clean distclean cleankeys lang
+.PHONY=install install-lang uninstall install-dev clean distclean cleankeys lang prebuild

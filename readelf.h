@@ -32,7 +32,11 @@ namespace readelf
 
 typedef std::vector<char>					CharArray;
 typedef std::vector<unsigned char>			UCharArray;
-typedef std::map<std::string, Elf32_Shdr>	SectionMap;
+#ifdef ARCH_64BIT
+	typedef std::map<std::string, Elf64_Shdr>	SectionMap;
+#else
+	typedef std::map<std::string, Elf32_Shdr>	SectionMap;
+#endif
 
 class CReadElf
 {
@@ -43,7 +47,11 @@ public:
 	virtual UCharArray	 getSection(const char *szSectionName);
 
 protected:
+#ifdef ARCH_64BIT
+	Elf64_Ehdr			 m_elf;
+#else
 	Elf32_Ehdr			 m_elf;
+#endif
 	SectionMap			 m_mpSections;
 	std::ifstream		 m_fElf;
 };

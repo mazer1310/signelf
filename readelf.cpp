@@ -25,7 +25,11 @@
 
 namespace
 {
+#ifdef ARCH_64BIT
+	typedef std::vector<Elf64_Shdr> SectionArray;
+#else
 	typedef std::vector<Elf32_Shdr> SectionArray;
+#endif
 }
 
 /*
