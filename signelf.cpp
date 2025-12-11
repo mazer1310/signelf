@@ -33,59 +33,141 @@
 
 namespace signelf
 {
+#ifdef OPENSSL_MODERN
+	const EVP_MD* Get_EVP_MD(const char* pAlgorithmName)
+	{
+		if (strcmp(pAlgorithmName, "sha256") == 0 || strcmp(pAlgorithmName, "SHA256"
+			 || strcmp(pAlgorithmName, "sha2" || strcmp(pAlgorithmName, "SHA2") == 0) 
+		{ //if sha2 is specified, just use sha256
+			return EVP_sha256();
+		}
+		else if (strcmp(pAlgorithmName, "sha512") == 0 || strcmp(pAlgorithmName, "SHA512") == 0) {
+			return EVP_sha512();
+		}
+		else if (strcmp(pAlgorithmName, "sha1") == 0 || strcmp(pAlgorithmName, "SHA1") == 0) 
+		{
+			return EVP_sha1();
+		}
+		else if (strcmp(pAlgorithmName, "sha224") == 0 || strcmp(pAlgorithmName, "SHA224") == 0) 
+		{
+			return EVP_sha224();
+		}
+		else if (strcmp(pAlgorithmName, "sha384") == 0 || strcmp(pAlgorithmName, "SHA384") == 0) {
+			return EVP_sha512();
+		}
+		
+		return nullptr;
+	}
+#endif
+
 	UCharArray hashLib(const char *szBinFile)
 	{
 		// create a buffer for the hash
 		UCharArray arRetval;
 
-		// create a SHA hash context
-		SHA_CTX sha;
-		SHA1_Init(&sha);
+		// create a hash context
+	#ifdef OPENSSL_MODERN
+		EVP_MD_CTX* sha = EVP_MD_CTX_create();
+		const EVP_MD* hashalg = Get_EVP_MD("sha256");
+		EVP_DigestInit_ex(sha, hashalg, nullptr);
+	#else
+		SHA_CTX shactx;
+		SHA_CTX* sha = &shactx;
+		SHA1_Init(sha);
+	#endif
 
 		readelf::CReadElf elf(szBinFile);
 		// get the hash for the data section
-		hashSection(&elf, ".data", &sha);
+		hashSection(&elf, ".data", sha);
 		// get the hash for the text section
-		hashSection(&elf, ".text", &sha);
+		hashSection(&elf, ".text", sha);
 		// get the hash for the rodata section
-		hashSection(&elf, ".rodata", &sha);
+		hashSection(&elf, ".rodata", sha);
 		// get the hash for the init section
-		hashSection(&elf, ".init", &sha);
+		hashSection(&elf, ".init", sha);
 		// get the hash for the fini section
-		hashSection(&elf, ".fini", &sha);
+		hashSection(&elf, ".fini", sha);
 		// get the hash for the ctors section
-		hashSection(&elf, ".ctors", &sha);
+		hashSection(&elf, ".ctors", sha);
 		// get the hash for the dtors section
-		hashSection(&elf, ".dtors", &sha);
+		hashSection(&elf, ".dtors", sha);
 		// get the hash for the dynamic section
-		hashSection(&elf, ".dynamic", &sha);
+		hashSection(&elf, ".dynamic", sha);
 		// get the hash for the dynsym section
-		hashSection(&elf, ".dynsym", &sha);
+		hashSection(&elf, ".dynsym", sha);
 		// get the hash for the dynstr section
-		hashSection(&elf, ".dynstr", &sha);
-		// size the buffer large enough
-		arRetval.resize(SHA_DIGEST_LENGTH);
-		// resolve the hash
-		SHA1_Final(&arRetval[0], &sha);
+		hashSection(&elf, ".dynstr", sha);
 
+		// size the buffer large enough
+	#ifdef OPENSSL_MODERN
+		int mdsize = EVP_MD_CTX_size(sha);
+	#else
+		int mdsize = SHA_DIGEST_LENGTH;
+	#endif
+		arRetval.resize(mdsize);
+
+		// resolve the hash
+	#ifdef OPENSSL_MODERN
+		EVP_DigestFinal_ex(sha, arRetval.data(), mdsize);
+		EVP_MD_CTX_destroy(sha);
+	#else
+		SHA1_Final(arRetval.data(), sha);
+	#endif
 
 		return arRetval;
 	}
 
+#ifdef OPENSSL_MODERN
+	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, EVP_MD_CTX *pSHA)
+#else
 	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSHA)
+#endif
 	{
 		// pick up the given section and generate a hash of the thing
 		readelf::UCharArray section = pElf->getSection(szSectionName);
-		if(!section.empty())
+		if (!section.empty())
 		{
 			// hash them
-			SHA1_Update(pSHA, &section[0], section.size());
+#ifdef OPENSSL_MODERN
+			EVP_DigestUpdate(pSHA, section.data(), section.size());
+#else
+			SHA1_Update(pSHA, section.data(), section.size());
+#endif
 		}
 	}
 
 	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize)
 	{
 		UCharArray arRetval;
+#ifdef OPENSSL_MODERN
+		// read the private key from our buffer
+		EVP_PKEY *pKey = nullptr;
+		BIO *pBio = BIO_new_mem_buf(szKeyBuf, nKeySize);
+		// if we could wrap it
+		if (pBio)
+		{
+			// Read the key from the bio
+			d2i_PrivateKey_bio(pBio, &pKey);
+		}
+
+		if (pKey)
+		{
+			EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+			EVP_PKEY_sign_init(ctx);
+			EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
+			const EVP_MD* hashalg = Get_EVP_MD("sha256");
+			EVP_PKEY_CTX_set_signature_md(ctx, hashalg);
+
+			//calculate signature length
+			int siglen = 0;
+			EVP_PKEY_sign(ctx, NULL, &siglen, md, mdlen);
+
+			arRetval.resize(siglen);
+			EVP_PKEY_sign(ctx, arRetval.data(), &siglen, szHashBuf, nHashSize);
+
+			EVP_PKEY_CTX_free(ctx);
+		}
+#else
 		RSA *pKey = NULL;
 
 		// wrap the keybuf in a bio
@@ -108,13 +190,47 @@ namespace signelf
 			// sign the hash and save it to arRetval
 			RSA_sign(NID_sha1, szHashBuf, nHashSize, &arRetval[0], &nSigLen, pKey);
 		}
-
+#endif
 		return arRetval;
 	}
 
 	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile)
 	{
 		bool bResult = false;
+#ifdef OPENSSL_MODERN
+		// read the private key from our buffer
+		EVP_PKEY *pKey = nullptr;
+		BIO *pBio = BIO_new_mem_buf(szKeyBuf, nKeySize);
+		// if we could wrap it
+		if (pBio)
+		{
+			// Read the key from the bio
+			pKey = d2i_PUBKEY_bio(pBio, &pKey);
+		}
+
+		if (pKey)
+		{
+			// get the signature from the binfile
+			readelf::CReadElf elf(szBinFile);
+			readelf::UCharArray szSig = elf.getSection(".lsesig");
+
+			// if we could get the section
+			if (!szSig.empty())
+			{
+				// calculate the hash of the binary
+				UCharArray szHash = hashLib(szBinFile);
+
+				// verify the signature
+				EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+				EVP_PKEY_verify_init(ctx);
+				EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
+				EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) <= 0)
+				const EVP_MD* hashalg = Get_EVP_MD("sha256");
+				bResult = (1 == EVP_PKEY_verify(ctx, szSig.data(), szSig.size(), szHash.data(), szHash.size()));
+				EVP_PKEY_CTX_free(ctx);
+			}
+		}
+#else
 		RSA *pKey = NULL;
 		BIO *pBio;
 		// load up the key
@@ -144,7 +260,7 @@ namespace signelf
 				RSA_free(pKey);
 			}
 		}
-
+#endif
 		return bResult;
 	}
 

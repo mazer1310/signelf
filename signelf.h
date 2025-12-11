@@ -23,9 +23,17 @@
 
 #include <vector>
 
-#include <openssl/err.h>
-#include <openssl/sha.h>
+#include <openssl/opensslv.h>
+#if OPENSSL_VERSION_MAJOR >= 3
+#	define OPENSSL_MODERN
+#	include <openssl/evp.h>
+#	include <openssl/rsa.h>
+#else
+#	include <openssl/err.h>
+#	include <openssl/sha.h>
+#endif
 #include <openssl/x509.h>
+
 
 #include "readelf.h"
 
@@ -33,8 +41,13 @@ namespace signelf
 {
 	typedef std::vector<unsigned char> UCharArray;
 
+#ifdef OPENSSL_MODERN
+	// hash a given section in the pBfd and add it to pSha
+	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, EVP_MD_CTX *pSha);
+#else
 	// hash a given section in the pBfd and add it to pSha
 	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSha);
+#endif
 
 	// generate a hash of the .text and .data sections of the binary
 	UCharArray hashLib(const char *szBinFile);
