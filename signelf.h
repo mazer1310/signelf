@@ -43,20 +43,20 @@ namespace signelf
 
 #ifdef OPENSSL_MODERN
 	// hash a given section in the pBfd and add it to pSha
-	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, EVP_MD_CTX *pSha);
+	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, EVP_MD_CTX *pSha, char* errMsg = nullptr, unsigned int errMsgSize = 0);
 #else
 	// hash a given section in the pBfd and add it to pSha
-	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSha);
+	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSha, char* errMsg = nullptr, unsigned int errMsgSize = 0);
 #endif
 
-	// generate a hash of the .text and .data sections of the binary
-	UCharArray hashLib(const char *szBinFile);
+	// generate a hash of the .text and .data sections of the binary.  Optional errMsg and errMsgSize will be filled with failure message
+	UCharArray hashLib(const char *szBinFile, char* errMsg = nullptr, unsigned int errMsgSize = 0);
 
 	// sign a given hash with the key stored in szKeyBuf;
-	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize);
+	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize, char* errMsg = nullptr, unsigned int errMsgSize = 0);
 
 	// verify a libs signature (assumed to be stored in .lsesig section of szBinFile) with the key given in szKeyBuf
-	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile);
+	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile, char* errMsg = nullptr, unsigned int errMsgSize = 0);
 
 	// helper function, useful for debugging
 	void hexPrint(const char *szName, const char *szBuf, const unsigned int nLength);

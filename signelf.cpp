@@ -31,6 +31,24 @@
 #include "readelf.h"
 #include "signelf.h"
 
+#ifdef OPENSSL_MODERN
+struct EVP_MD_CTX_Wrapper
+{
+public:
+	EVP_MD_CTX_Wrapper() : ctx(nullptr) {}
+	~EVP_MD_CTX_Wrapper() { if (ctx) EVP_MD_CTX_free(ctx); }
+	EVP_MD_CTX* ctx;
+};
+
+struct EVP_PKEY_CTX_Wrapper
+{
+public:
+	EVP_PKEY_CTX_Wrapper() : ctx(nullptr) {}
+	~EVP_PKEY_CTX_Wrapper() { if (ctx) EVP_PKEY_CTX_free(ctx); }
+	EVP_PKEY_CTX* ctx;
+};
+#endif
+
 namespace signelf
 {
 #ifdef OPENSSL_MODERN
@@ -62,16 +80,29 @@ namespace signelf
 	}
 #endif
 
-	UCharArray hashLib(const char *szBinFile)
+	UCharArray hashLib(const char *szBinFile, char* errMsg, unsigned int errMsgSize)
 	{
 		// create a buffer for the hash
 		UCharArray arRetval;
 
 		// create a hash context
 	#ifdef OPENSSL_MODERN
-		EVP_MD_CTX* sha = EVP_MD_CTX_create();
+		EVP_MD_CTX_Wrapper shaWrapper;
+		shaWrapper.ctx = EVP_MD_CTX_new(); 
+		if (!shaWrapper.ctx)
+		{
+			if (errMsg)
+				snprintf(errMsg, errMsgSize, "Error: EVP_MD_CTX_new failed\n");
+			return arRetval;
+		}
+		EVP_MD_CTX* sha = shaWrapper.ctx;
 		const EVP_MD* hashalg = Get_EVP_MD("sha256");
-		EVP_DigestInit_ex(sha, hashalg, nullptr);
+		if (EVP_DigestInit_ex(sha, hashalg, nullptr) != 1)
+		{
+			if (errMsg)
+				snprintf(errMsg, errMsgSize, "Error: EVP_DigestInit failed\n");
+			return arRetval;
+		}
 	#else
 		SHA_CTX shactx;
 		SHA_CTX* sha = &shactx;
@@ -80,25 +111,35 @@ namespace signelf
 
 		readelf::CReadElf elf(szBinFile);
 		// get the hash for the data section
-		hashSection(&elf, ".data", sha);
+		if (!hashSection(&elf, ".data", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the text section
-		hashSection(&elf, ".text", sha);
+		if (!hashSection(&elf, ".text", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the rodata section
-		hashSection(&elf, ".rodata", sha);
+		if (!hashSection(&elf, ".rodata", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the init section
-		hashSection(&elf, ".init", sha);
+		if (!hashSection(&elf, ".init", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the fini section
-		hashSection(&elf, ".fini", sha);
+		if (!hashSection(&elf, ".fini", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the ctors section
-		hashSection(&elf, ".ctors", sha);
+		if (!hashSection(&elf, ".ctors", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the dtors section
-		hashSection(&elf, ".dtors", sha);
+		if (!hashSection(&elf, ".dtors", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the dynamic section
-		hashSection(&elf, ".dynamic", sha);
+		if (!hashSection(&elf, ".dynamic", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the dynsym section
-		hashSection(&elf, ".dynsym", sha);
+		if (!hashSection(&elf, ".dynsym", sha, errMsg, errMsgSize))
+			return arRetval;
 		// get the hash for the dynstr section
-		hashSection(&elf, ".dynstr", sha);
+		if (!hashSection(&elf, ".dynstr", sha, errMsg, errMsgSize))
+			return arRetval;
 
 		// size the buffer large enough
 	#ifdef OPENSSL_MODERN
@@ -110,8 +151,11 @@ namespace signelf
 
 		// resolve the hash
 	#ifdef OPENSSL_MODERN
-		EVP_DigestFinal_ex(sha, arRetval.data(), &mdsize);
-		EVP_MD_CTX_destroy(sha);
+		if (EVP_DigestFinal_ex(sha, arRetval.data(), &mdsize) != 1)
+		{
+			if (errMsg)
+				snprintf(errMsg, errMsgSize, "Error: EVP_DigestFinal_ex failed\n");
+		}
 	#else
 		SHA1_Final(arRetval.data(), sha);
 	#endif
@@ -120,9 +164,9 @@ namespace signelf
 	}
 
 #ifdef OPENSSL_MODERN
-	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, EVP_MD_CTX *pSHA)
+	bool hashSection(readelf::CReadElf *pElf, const char *szSectionName, EVP_MD_CTX *pSHA, char* errMsg, unsigned int errMsgSize)
 #else
-	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSHA)
+	bool hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSHA, char* errMsg, unsigned int errMsgSize)
 #endif
 	{
 		// pick up the given section and generate a hash of the thing
@@ -131,14 +175,20 @@ namespace signelf
 		{
 			// hash them
 #ifdef OPENSSL_MODERN
-			EVP_DigestUpdate(pSHA, section.data(), section.size());
+			if (EVP_DigestUpdate(pSHA, section.data(), section.size()) != 1)
+			{
+				if (errMsg)
+					snprintf(errMsg, errMsgSize, "Error: EVP_DigestUpdate failed for section %hs\n", szSectionName);
+				return false;
+			}
 #else
 			SHA1_Update(pSHA, section.data(), section.size());
 #endif
 		}
+		return true;
 	}
 
-	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize)
+	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize, char* errMsg, unsigned int errMsgSize)
 	{
 		UCharArray arRetval;
 #ifdef OPENSSL_MODERN
@@ -151,24 +201,65 @@ namespace signelf
 			// Read the key from the bio
 			d2i_PrivateKey_bio(pBio, &pKey);
 		}
+		else
+		{
+			if (errMsg)
+				snprintf(errMsg, errMsgSize, "Error: BIO_new_mem_buf failed to allocate bio\n");
+			return arRetval;
+		}
 
 		if (pKey)
 		{
-			EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
-			EVP_PKEY_sign_init(ctx);
-			EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
+			EVP_PKEY_CTX_Wrapper ctxWrapper;
+			ctxWrapper.ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+			if (!ctxWrapper.ctx)
+			{
+				if (errMsg)
+					snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_CTX_new failed to create context\n");
+				return arRetval;
+			}
+			
+			if (EVP_PKEY_sign_init(ctxWrapper.ctx) != 1)
+			{
+				if (errMsg)
+					snprintf("Error: EVP_PKEY_CTX_new failed\n");
+				return arRetval;
+			}
+
+			if (EVP_PKEY_CTX_set_rsa_padding(ctxWrapper.ctx, RSA_PKCS1_PADDING) != 1)
+			{
+				if (errMsg)
+					snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_CTX_set_rsa_padding failed\n");
+				return arRetval;
+			}
+			
 			const EVP_MD* hashalg = Get_EVP_MD("sha256");
-			EVP_PKEY_CTX_set_signature_md(ctx, hashalg);
+			if (EVP_PKEY_CTX_set_signature_md(ctxWrapper.ctx, hashalg) != 1)
+			{
+				if (errMsg)
+					snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_CTX_set_signature_md failed\n");
+				return arRetval;
+			}
 
 			//calculate signature length
 			size_t siglen = 0;
-			EVP_PKEY_sign(ctx, NULL, &siglen, szHashBuf, nHashSize);
+			if (EVP_PKEY_sign(ctxWrapper.ctx, NULL, &siglen, szHashBuf, nHashSize) != 1)
+			{
+				if (errMsg)
+					snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_sign failed while calculating signature length\n");
+				return arRetval;
+			}
 
 			arRetval.resize(siglen);
-			EVP_PKEY_sign(ctx, arRetval.data(), &siglen, szHashBuf, nHashSize);
-
-			EVP_PKEY_CTX_free(ctx);
+			if (EVP_PKEY_sign(ctxWrapper.ctx, arRetval.data(), &siglen, szHashBuf, nHashSize) != 1)
+			{
+				if (errMsg)
+					snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_sign failed while signing hash\n");
+				return arRetval;
+			}
 		}
+		else if (errMsg)
+			snprintf(errMsg, errMsgSize, "Error: d2i_PrivateKey_bio failed to read private key\n");
 #else
 		RSA *pKey = NULL;
 
@@ -196,7 +287,7 @@ namespace signelf
 		return arRetval;
 	}
 
-	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile)
+	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile, char* errMsg, unsigned int errMsgSize)
 	{
 		bool bResult = false;
 #ifdef OPENSSL_MODERN
@@ -208,6 +299,12 @@ namespace signelf
 		{
 			// Read the key from the bio
 			pKey = d2i_PUBKEY_bio(pBio, &pKey);
+		}
+		else
+		{
+			if (errMsg)
+				snprintf(errMsg, errMsgSize, "Error: BIO_new_mem_buf failed to allocate bio\n");
+			return false;
 		}
 
 		if (pKey)
@@ -223,15 +320,38 @@ namespace signelf
 				UCharArray szHash = hashLib(szBinFile);
 
 				// verify the signature
-				EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
-				EVP_PKEY_verify_init(ctx);
-				EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
+				EVP_PKEY_CTX_wrapper ctxWrapper;
+				ctxWrapper.ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+				if (!ctxWrapper.ctx)
+				{
+					if (errMsg)
+						snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_CTX_new failed\n");
+					return false;
+				}
+				if (EVP_PKEY_verify_init(ctxWrapper.ctx) != 1)
+				{
+					if (errMsg)
+						snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_verify_init failed\n");
+					return false;
+				}
+				if (EVP_PKEY_CTX_set_rsa_padding(ctxWrapper.ctx, RSA_PKCS1_PADDING) != 1)
+				{
+					if (errMsg)
+						snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_CTX_set_rsa_padding failed\n");
+					return false;
+				}
 				const EVP_MD* hashalg = Get_EVP_MD("sha256");
-				EVP_PKEY_CTX_set_signature_md(ctx, hashalg); 
-				bResult = (1 == EVP_PKEY_verify(ctx, szSig.data(), szSig.size(), szHash.data(), szHash.size()));
-				EVP_PKEY_CTX_free(ctx);
+				if (EVP_PKEY_CTX_set_signature_md(ctxWrapper.ctx, hashalg) != 1)
+				{
+					if (errMsg)
+						snprintf(errMsg, errMsgSize, "Error: EVP_PKEY_CTX_set_signature_md failed\n");
+					return false;
+				}
+				bResult = (1 == EVP_PKEY_verify(ctxWrapper.ctx, szSig.data(), szSig.size(), szHash.data(), szHash.size()))
 			}
 		}
+		else if (errMsg)
+			snprintf(errMsg, errMsgSize, "Error: d2i_PUBKEY_bio failed to read public key\n");
 #else
 		RSA *pKey = NULL;
 		BIO *pBio;
