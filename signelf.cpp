@@ -36,12 +36,13 @@ namespace signelf
 #ifdef OPENSSL_MODERN
 	const EVP_MD* Get_EVP_MD(const char* pAlgorithmName)
 	{
-		if (strcmp(pAlgorithmName, "sha256") == 0 || strcmp(pAlgorithmName, "SHA256"
-			 || strcmp(pAlgorithmName, "sha2" || strcmp(pAlgorithmName, "SHA2") == 0) 
+		if (strcmp(pAlgorithmName, "sha256") == 0 || strcmp(pAlgorithmName, "SHA256") == 0
+			 || strcmp(pAlgorithmName, "sha2") == 0 || strcmp(pAlgorithmName, "SHA2") == 0) 
 		{ //if sha2 is specified, just use sha256
 			return EVP_sha256();
 		}
-		else if (strcmp(pAlgorithmName, "sha512") == 0 || strcmp(pAlgorithmName, "SHA512") == 0) {
+		else if (strcmp(pAlgorithmName, "sha512") == 0 || strcmp(pAlgorithmName, "SHA512") == 0) 
+		{
 			return EVP_sha512();
 		}
 		else if (strcmp(pAlgorithmName, "sha1") == 0 || strcmp(pAlgorithmName, "SHA1") == 0) 
@@ -52,7 +53,8 @@ namespace signelf
 		{
 			return EVP_sha224();
 		}
-		else if (strcmp(pAlgorithmName, "sha384") == 0 || strcmp(pAlgorithmName, "SHA384") == 0) {
+		else if (strcmp(pAlgorithmName, "sha384") == 0 || strcmp(pAlgorithmName, "SHA384") == 0) 
+		{
 			return EVP_sha512();
 		}
 		
@@ -100,15 +102,15 @@ namespace signelf
 
 		// size the buffer large enough
 	#ifdef OPENSSL_MODERN
-		int mdsize = EVP_MD_CTX_size(sha);
+		unsigned int mdsize = EVP_MD_CTX_size(sha);
 	#else
-		int mdsize = SHA_DIGEST_LENGTH;
+		unsigned int mdsize = SHA_DIGEST_LENGTH;
 	#endif
 		arRetval.resize(mdsize);
 
 		// resolve the hash
 	#ifdef OPENSSL_MODERN
-		EVP_DigestFinal_ex(sha, arRetval.data(), mdsize);
+		EVP_DigestFinal_ex(sha, arRetval.data(), &mdsize);
 		EVP_MD_CTX_destroy(sha);
 	#else
 		SHA1_Final(arRetval.data(), sha);
@@ -159,8 +161,8 @@ namespace signelf
 			EVP_PKEY_CTX_set_signature_md(ctx, hashalg);
 
 			//calculate signature length
-			int siglen = 0;
-			EVP_PKEY_sign(ctx, NULL, &siglen, md, mdlen);
+			size_t siglen = 0;
+			EVP_PKEY_sign(ctx, NULL, &siglen, szHashBuf, nHashSize);
 
 			arRetval.resize(siglen);
 			EVP_PKEY_sign(ctx, arRetval.data(), &siglen, szHashBuf, nHashSize);
@@ -224,8 +226,8 @@ namespace signelf
 				EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
 				EVP_PKEY_verify_init(ctx);
 				EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
-				EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) <= 0)
 				const EVP_MD* hashalg = Get_EVP_MD("sha256");
+				EVP_PKEY_CTX_set_signature_md(ctx, hashalg); 
 				bResult = (1 == EVP_PKEY_verify(ctx, szSig.data(), szSig.size(), szHash.data(), szHash.size()));
 				EVP_PKEY_CTX_free(ctx);
 			}
@@ -266,7 +268,7 @@ namespace signelf
 
 	void hexPrint(const char *szName, const char *szBuf, const unsigned int nLength)
 	{
-		std::cout << "hash (" << nLength << ") ---\n" << std::endl;
+		std::cout << "hash " << szName << " (" << nLength << ") ---\n" << std::endl;
 		for(unsigned int i=0 ; i < nLength ; ++i)
 		{
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << szBuf[i];

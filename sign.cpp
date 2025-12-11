@@ -40,6 +40,12 @@ int main(int argc, char **argv)
 	int nRetval = 0;
 	signelf::UCharArray arHash;
 
+	if (argc < 2)
+	{
+		std::cout << "Usage: signelf <binary name>" << std::endl;
+		//invalid usage
+		return 4;
+	}
 	// open an .so for read using the default target
 	arHash = signelf::hashLib(argv[1]);
 
