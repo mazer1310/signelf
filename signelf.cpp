@@ -241,7 +241,7 @@ namespace signelf
 				UCharArray szHash = hashLib(szBinFile);
 
 				// verify the signature
-				EVP_PKEY_CTX_wrapper ctxWrapper;
+				EVP_PKEY_CTX_Wrapper ctxWrapper;
 				ctxWrapper.ctx = EVP_PKEY_CTX_new(pKey, nullptr);
 				EVP_PKEY_verify_init(ctxWrapper.ctx);
 				EVP_PKEY_CTX_set_rsa_padding(ctxWrapper.ctx, RSA_PKCS1_PADDING);
