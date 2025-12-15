@@ -64,13 +64,13 @@ namespace signelf
 	HashAlg getHashAlg(const char* szHashAlgName);
 
 	// generate a hash of the .text and .data sections of the binary with the specified hash algorithm
-	UCharArray hashLib(const char *szBinFile, HashAlg pHashAlg = HashAlg_256);
+	UCharArray hashLib(const char *szBinFile, HashAlg pHashAlg = HashAlg_sha256);
 
 	// sign a given hash with the key stored in szKeyBuf and the specified hash algorithm
-	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize, HashAlg pHashAlg = HashAlg_256);
+	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize, HashAlg pHashAlg = HashAlg_sha256);
 
 	// verify a libs signature (assumed to be stored in .lsesig section of szBinFile) with the key given in szKeyBuf and the specified hash algorithm
-	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile, HashAlg pHashAlg = HashAlg_256);
+	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile, HashAlg pHashAlg = HashAlg_sha256);
 
 	// helper function, useful for debugging
 	void hexPrint(const char *szName, const char *szBuf, const unsigned int nLength);
