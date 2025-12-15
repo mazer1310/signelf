@@ -71,6 +71,14 @@ int main(int argc, char **argv)
 				// now copy the sig into the object
 				nRetval = system(sCommandline.c_str());
 
+				if (nRetval != 0)
+				{
+					printf("*** --add-section failed: trying --update-section instead\n");
+					sCommandline = "objcopy --update-section .lsesig=object.sig ";
+					sCommandline += argv[1];
+					nRetval = system(sCommandline.c_str());
+				}
+
 				// remove the sig file
 				std::remove("object.sig");
 			}
