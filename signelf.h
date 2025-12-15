@@ -48,15 +48,15 @@ namespace signelf
 	// hash a given section in the pBfd and add it to pSha
 	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSha);
 #endif
-	enum HashAlg {
+	
+	enum HashAlg 
+	{
 		HashAlg_sha1
-#ifdef OPENSSL_MODERN
 		, HashAlg_sha224
 		, HashAlg_sha256  //default
 		, HashAlg_sha384
 		, HashAlg_sha512
-#endif
-	}
+	};
 	//supported: all lowercase or all uppercase matching the entries above:
 	//e.g. "sha256" or "SHA256", "sha1" or "SHA1", etc.
 	//for older versions of openssl (before 3.0), only sha1 is supported, and the various pHashAlg parameters are ignored
