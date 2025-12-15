@@ -109,7 +109,7 @@ namespace signelf
 		EVP_MD_CTX_Wrapper shaWrapper;
 		shaWrapper.ctx = EVP_MD_CTX_new(); 
 		EVP_MD_CTX* sha = shaWrapper.ctx;
-		const EVP_MD* hashalg = Get_EVP_MD(pHashAlg);
+		const EVP_MD* hashalg = get_EVP_MD(pHashAlg);
 		EVP_DigestInit_ex(sha, hashalg, nullptr);
 	#else
 		SHA_CTX shactx;
@@ -196,7 +196,7 @@ namespace signelf
 			ctxWrapper.ctx = EVP_PKEY_CTX_new(pKey, nullptr);
 			EVP_PKEY_sign_init(ctxWrapper.ctx);
 			EVP_PKEY_CTX_set_rsa_padding(ctxWrapper.ctx, RSA_PKCS1_PADDING);
-			const EVP_MD* hashalg = Get_EVP_MD(pHashAlg);
+			const EVP_MD* hashalg = get_EVP_MD(pHashAlg);
 			EVP_PKEY_CTX_set_signature_md(ctxWrapper.ctx, hashalg);
 
 			//calculate signature length
@@ -264,7 +264,7 @@ namespace signelf
 				ctxWrapper.ctx = EVP_PKEY_CTX_new(pKey, nullptr);
 				EVP_PKEY_verify_init(ctxWrapper.ctx);
 				EVP_PKEY_CTX_set_rsa_padding(ctxWrapper.ctx, RSA_PKCS1_PADDING);
-				const EVP_MD* hashalg = Get_EVP_MD(pHashAlg);
+				const EVP_MD* hashalg = get_EVP_MD(pHashAlg);
 				EVP_PKEY_CTX_set_signature_md(ctxWrapper.ctx, hashalg); 
 				bResult = (1 == EVP_PKEY_verify(ctxWrapper.ctx, szSig.data(), szSig.size(), szHash.data(), szHash.size()));
 			}
