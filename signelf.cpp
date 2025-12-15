@@ -51,36 +51,55 @@ public:
 
 namespace signelf
 {
-#ifdef OPENSSL_MODERN
-	const EVP_MD* Get_EVP_MD(const char* pAlgorithmName)
+	HashAlg getHashAlg(const char* szHashAlgName)
 	{
-		if (strcmp(pAlgorithmName, "sha256") == 0 || strcmp(pAlgorithmName, "SHA256") == 0
-			 || strcmp(pAlgorithmName, "sha2") == 0 || strcmp(pAlgorithmName, "SHA2") == 0) 
+		if (strcmp(szHashAlgName, "sha1") == 0 || strcmp(szHashAlgName, "SHA1") == 0) 
+		{
+			return HashAlg_sha1;
+		}
+		else if (strcmp(szHashAlgName, "sha224") == 0 || strcmp(szHashAlgName, "SHA224") == 0) 
+		{
+			return HashAlg_sha224;
+		}
+		else if (strcmp(szHashAlgName, "sha256") == 0 || strcmp(szHashAlgName, "SHA256") == 0
+			|| strcmp(szHashAlgName, "sha2") == 0 || strcmp(szHashAlgName, "SHA2") == 0) 
 		{ //if sha2 is specified, just use sha256
-			return EVP_sha256();
+			return HashAlg_sha256;
 		}
-		else if (strcmp(pAlgorithmName, "sha512") == 0 || strcmp(pAlgorithmName, "SHA512") == 0) 
+		else if (strcmp(szHashAlgName, "sha384") == 0 || strcmp(szHashAlgName, "SHA384") == 0) 
 		{
-			return EVP_sha512();
+			return HashAlg_sha384;
 		}
-		else if (strcmp(pAlgorithmName, "sha1") == 0 || strcmp(pAlgorithmName, "SHA1") == 0) 
+		else if (strcmp(szHashAlgName, "sha512") == 0 || strcmp(szHashAlgName, "SHA512") == 0) 
 		{
-			return EVP_sha1();
+			return HashAlg_sha512;
 		}
-		else if (strcmp(pAlgorithmName, "sha224") == 0 || strcmp(pAlgorithmName, "SHA224") == 0) 
+		else //default to sha256
+			return HashAlg_sha256;
+	}
+
+#ifdef OPENSSL_MODERN
+	const EVP_MD* get_EVP_MD(HashAlg pHashAlg)
+	{
+		switch (pHashAlg)
 		{
-			return EVP_sha224();
+			case HashAlg_sha1:
+				return EVP_sha1();
+			case HashAlg_sha224:
+				return EVP_sha1();
+			case HashAlg_sha384:
+				return EVP_sha1();
+			case HashAlg_sha512:
+				return EVP_sha512();
+			case HashAlg_sha256:
+			default:
+				return EVP_sha256();
 		}
-		else if (strcmp(pAlgorithmName, "sha384") == 0 || strcmp(pAlgorithmName, "SHA384") == 0) 
-		{
-			return EVP_sha512();
-		}
-		
 		return nullptr;
 	}
 #endif
 
-	UCharArray hashLib(const char *szBinFile)
+	UCharArray hashLib(const char *szBinFile, HashAlg pHashAlg)
 	{
 		// create a buffer for the hash
 		UCharArray arRetval;
@@ -90,7 +109,7 @@ namespace signelf
 		EVP_MD_CTX_Wrapper shaWrapper;
 		shaWrapper.ctx = EVP_MD_CTX_new(); 
 		EVP_MD_CTX* sha = shaWrapper.ctx;
-		const EVP_MD* hashalg = Get_EVP_MD("sha256");
+		const EVP_MD* hashalg = Get_EVP_MD(pHashAlg);
 		EVP_DigestInit_ex(sha, hashalg, nullptr);
 	#else
 		SHA_CTX shactx;
@@ -157,7 +176,7 @@ namespace signelf
 		}
 	}
 
-	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize)
+	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize, HashAlg pHashAlg)
 	{
 		UCharArray arRetval;
 #ifdef OPENSSL_MODERN
@@ -177,7 +196,7 @@ namespace signelf
 			ctxWrapper.ctx = EVP_PKEY_CTX_new(pKey, nullptr);
 			EVP_PKEY_sign_init(ctxWrapper.ctx);
 			EVP_PKEY_CTX_set_rsa_padding(ctxWrapper.ctx, RSA_PKCS1_PADDING);
-			const EVP_MD* hashalg = Get_EVP_MD("sha256");
+			const EVP_MD* hashalg = Get_EVP_MD(pHashAlg);
 			EVP_PKEY_CTX_set_signature_md(ctxWrapper.ctx, hashalg);
 
 			//calculate signature length
@@ -214,7 +233,7 @@ namespace signelf
 		return arRetval;
 	}
 
-	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile)
+	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile, HashAlg pHashAlg)
 	{
 		bool bResult = false;
 #ifdef OPENSSL_MODERN
@@ -238,14 +257,14 @@ namespace signelf
 			if (!szSig.empty())
 			{
 				// calculate the hash of the binary
-				UCharArray szHash = hashLib(szBinFile);
+				UCharArray szHash = hashLib(szBinFile, pHashAlg);
 
 				// verify the signature
 				EVP_PKEY_CTX_Wrapper ctxWrapper;
 				ctxWrapper.ctx = EVP_PKEY_CTX_new(pKey, nullptr);
 				EVP_PKEY_verify_init(ctxWrapper.ctx);
 				EVP_PKEY_CTX_set_rsa_padding(ctxWrapper.ctx, RSA_PKCS1_PADDING);
-				const EVP_MD* hashalg = Get_EVP_MD("sha256");
+				const EVP_MD* hashalg = Get_EVP_MD(pHashAlg);
 				EVP_PKEY_CTX_set_signature_md(ctxWrapper.ctx, hashalg); 
 				bResult = (1 == EVP_PKEY_verify(ctxWrapper.ctx, szSig.data(), szSig.size(), szHash.data(), szHash.size()));
 			}
@@ -273,7 +292,7 @@ namespace signelf
 			if(!szSig.empty())
 			{
 				// pick up the hash of the binary
-				UCharArray szHash = hashLib(szBinFile);
+				UCharArray szHash = hashLib(szBinFile, pHashAlg);
 
 				// verify the signature
 				bResult = (0 != RSA_verify(NID_sha1, &szHash[0], szHash.size(), &szSig[0], szSig.size(), pKey));

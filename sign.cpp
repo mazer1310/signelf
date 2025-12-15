@@ -42,18 +42,27 @@ int main(int argc, char **argv)
 
 	if (argc < 2)
 	{
-		std::cout << "Usage: signelf <binary name>" << std::endl;
+		std::cout << "Usage: signelf <binary name> [hash algorithm]" << std::endl;
 		//invalid usage
 		return 4;
 	}
+
+	//Openssl > 3.0: default to sha256.  
+	//Openssl < 3.0: the hash algorithm will be ignored and sha1 will always be used.
+	//the hash algorithm MUST match the algorithm that will be used by verifyelf.
+	const char* hashAlgName = "sha256";
+	if (argc >= 3)
+		hashAlgName = argv[2];
+
+	signelf::HashAlg hashAlg = signelf::getHashAlg(hashAlgName);
 	// open an .so for read using the default target
-	arHash = signelf::hashLib(argv[1]);
+	arHash = signelf::hashLib(argv[1], hashAlg);
 
 	if(!arHash.empty())
 	{
 		// now generate the signature
 		signelf::UCharArray arSig;
-		arSig = signelf::signHash(reinterpret_cast<const unsigned char*>(&arHash[0]), arHash.size(), szKeyBuf, sizeof(szKeyBuf));
+		arSig = signelf::signHash(reinterpret_cast<const unsigned char*>(&arHash[0]), arHash.size(), szKeyBuf, sizeof(szKeyBuf), hashAlg);
 
 		if(!arSig.empty())
 		{

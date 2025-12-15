@@ -26,8 +26,24 @@
 int main(int argc, char **argv)
 {
 	// verify the lib using key in szKeyBuf
-	bool bVerify = signelf::verifyLib(szKeyBuf, sizeof(szKeyBuf), argv[1]);
-	std::cout << "Result: " << bVerify << std::endl;;
+	if (argc < 2)
+	{
+		std::cout << "Usage: verifyelf <binary name> [hash algorithm]" << std::endl;
+		//invalid usage, just return false.
+		return 0;
+	}
+
+	//Openssl > 3.0: default to sha256.  
+	//Openssl < 3.0: the hash algorithm will be ignored and sha1 will always be used.
+	//the hash algorithm MUST match the algorithm used by the original signelf call.
+	const char* hashAlgName = "sha256";
+	if (argc >= 3)
+		hashAlgName = argv[2];
+
+	signelf::HashAlg hashAlg = signelf::getHashAlg(hashAlgName);
+
+	bool bVerify = signelf::verifyLib(szKeyBuf, sizeof(szKeyBuf), argv[1], hashAlg);
+	std::cout << "Result: " << bVerify << std::endl;
 
 	return bVerify ? 0 : 1;
 }

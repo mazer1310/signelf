@@ -48,15 +48,29 @@ namespace signelf
 	// hash a given section in the pBfd and add it to pSha
 	void hashSection(readelf::CReadElf *pElf, const char *szSectionName, SHA_CTX *pSha);
 #endif
+	enum HashAlg {
+		HashAlg_sha1
+#ifdef OPENSSL_MODERN
+		, HashAlg_sha224
+		, HashAlg_sha256  //default
+		, HashAlg_sha384
+		, HashAlg_sha512
+#endif
+	}
+	//supported: all lowercase or all uppercase matching the entries above:
+	//e.g. "sha256" or "SHA256", "sha1" or "SHA1", etc.
+	//for older versions of openssl (before 3.0), only sha1 is supported, and the various pHashAlg parameters are ignored
+	//openssl 3.0 and above default to "sha256"
+	HashAlg getHashAlg(const char* szHashAlgName);
 
-	// generate a hash of the .text and .data sections of the binary
-	UCharArray hashLib(const char *szBinFile);
+	// generate a hash of the .text and .data sections of the binary with the specified hash algorithm
+	UCharArray hashLib(const char *szBinFile, HashAlg pHashAlg = HashAlg_256);
 
-	// sign a given hash with the key stored in szKeyBuf;
-	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize);
+	// sign a given hash with the key stored in szKeyBuf and the specified hash algorithm
+	UCharArray signHash(const unsigned char *szHashBuf, unsigned int nHashSize, unsigned char *szKeyBuf, unsigned int nKeySize, HashAlg pHashAlg = HashAlg_256);
 
-	// verify a libs signature (assumed to be stored in .lsesig section of szBinFile) with the key given in szKeyBuf
-	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile);
+	// verify a libs signature (assumed to be stored in .lsesig section of szBinFile) with the key given in szKeyBuf and the specified hash algorithm
+	bool verifyLib(unsigned char *szKeyBuf, unsigned int nKeySize, const char *szBinFile, HashAlg pHashAlg = HashAlg_256);
 
 	// helper function, useful for debugging
 	void hexPrint(const char *szName, const char *szBuf, const unsigned int nLength);
